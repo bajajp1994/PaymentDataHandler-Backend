@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pymongo
+pandas
+pydantic
+python-dotenv
+pydantic-settings
+python-multipart
