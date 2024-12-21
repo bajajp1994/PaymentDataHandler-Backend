@@ -7,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, File, UploadFile
 from fastapi.responses import FileResponse
 from io import BytesIO
+from fastapi.responses import JSONResponse
 
 def uploading_evidence(payment_id: str, file_data: bytes, file_name: str, file_type: str):
     evidence = Evidence(payment_id=payment_id, file_name=file_name, file_data=file_data, file_type=file_type)
@@ -21,7 +22,7 @@ def get_evidence(payment_id: str):
     evidence = evidence_collection.find_one({"payment_id": payment_id})
 
     if not evidence:
-        raise HTTPException(status_code=404, detail="Evidence not found")
+        return JSONResponse(status_code=400, content={"message": "Evidence found but no file data available"})
 
     if evidence:
         evidence["_id"] = str(evidence["_id"])  # Convert ObjectId to string
@@ -37,4 +38,4 @@ def get_evidence(payment_id: str):
         
         return FileResponse(temp_file_path, media_type=evidence["file_type"], headers={"Content-Disposition": f"attachment; filename={evidence['file_name']}"})
     
-    raise HTTPException(status_code=400, detail="No file data found") 
+    return JSONResponse(status_code=400, content={"message": "Evidence found but no file data available"})

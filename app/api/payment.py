@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from services.evidence_service import uploading_evidence, get_evidence
 from schemas.payment import PaymentCreateRequest, PaymentUpdateRequest, PaymentCreateResponse
@@ -5,7 +7,7 @@ from core.database import payments_collection, evidence_collection
 from typing import Optional
 from datetime import date, datetime
 from pymongo import DESCENDING
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from bson import ObjectId
 
 router = APIRouter()
@@ -178,10 +180,20 @@ async def download_evidence(payment_id: str):
         - HTTPException: If there is an error during the retrieval process.
 """
 @router.get("/get_payments")
+@router.get("/get_payments")
 def get_payments(
-    payee_country: Optional[str] = None,
+    payee_first_name: Optional[str] = None,
+    payee_last_name: Optional[str] = None,
+    payee_payment_status: Optional[str] = None,
+    payee_address_line_1: Optional[str] = None,
+    payee_address_line_2: Optional[str] = None,
     payee_city: Optional[str] = None,
-    search: Optional[str] = None,
+    payee_country: Optional[str] = None,
+    payee_province_or_state: Optional[str] = None,
+    payee_postal_code: Optional[str] = None,
+    payee_phone_number: Optional[str] = None,
+    payee_email: Optional[str] = None,
+    currency: Optional[str] = None,
     skip: int = 1,
     limit: int = 10,
 ):
@@ -209,52 +221,44 @@ def get_payments(
             {"$set": {"total_due": round(total_due, 2)}}
         )
 
-    # Build query for filtering and searching
+    # Build the query based on the fields passed from the frontend (only text fields)
     query = {}
-    if payee_country:
-        query["payee_country"] = payee_country
+    if payee_first_name:
+        query["payee_first_name"] = {"$regex": payee_first_name, "$options": "i"}
+    if payee_last_name:
+        query["payee_last_name"] = {"$regex": payee_last_name, "$options": "i"}
+    if payee_payment_status:
+        query["payee_payment_status"] = {"$regex": payee_payment_status, "$options": "i"}
+    if payee_address_line_1:
+        query["payee_address_line_1"] = {"$regex": payee_address_line_1, "$options": "i"}
+    if payee_address_line_2:
+        query["payee_address_line_2"] = {"$regex": payee_address_line_2, "$options": "i"}
     if payee_city:
-        query["payee_city"] = payee_city
-    if search:
-        # Define the fields to exclude
-        excluded_fields = ["payee_city", "payee_country"]
+        query["payee_city"] = {"$regex": payee_city, "$options": "i"}
+    if payee_country:
+        query["payee_country"] = {"$regex": payee_country, "$options": "i"}
+    if payee_province_or_state:
+        query["payee_province_or_state"] = {"$regex": payee_province_or_state, "$options": "i"}
+    if payee_postal_code:
+        query["payee_postal_code"] = {"$regex": payee_postal_code, "$options": "i"}
+    if payee_phone_number:
+        query["payee_phone_number"] = {"$regex": payee_phone_number, "$options": "i"}
+    if payee_email:
+        query["payee_email"] = {"$regex": payee_email, "$options": "i"}
+    if currency:
+        query["currency"] = {"$regex": currency, "$options": "i"}
 
-        # Get all fields in the Payment model except excluded ones
-        included_fields = [
-            "payee_first_name",
-            "payee_last_name",
-            "payee_payment_status",
-            "payee_added_date_utc",
-            "payee_due_date",
-            "payee_address_line_1",
-            "payee_address_line_2",
-            "payee_province_or_state",
-            "payee_postal_code",
-            "payee_phone_number",
-            "payee_email",
-            "currency",
-            "discount_percent",
-            "tax_percent",
-            "due_amount",
-            "total_due"
-        ]
-
-        # Remove excluded fields from the list
-        included_fields = [field for field in included_fields if field not in excluded_fields]
-
-        query["$or"] = [
-            {field: {"$regex": search, "$options": "i"}} for field in included_fields
-        ]
-
+    # Pagination calculation
     calculate_skip = (skip - 1) * limit
     # Fetch filtered and paginated results
-    results = payments_collection.find(query).sort("payee_due_date", DESCENDING).skip(calculate_skip).limit(limit)
+    results = payments_collection.find(query).sort("payee_due_date", -1).skip(calculate_skip).limit(limit)
 
     total_count = payments_collection.count_documents(query)
 
     # Convert MongoDB results to JSON serializable format
-    payments_list = [
-        {
+    payments_list = []
+    for payment in results:
+        payment_data = {
             **{
                 key: (str(value) if key == "_id" else value)
                 for key, value in payment.items()
@@ -266,7 +270,26 @@ def get_payments(
                 else payment["payee_due_date"]
             ),
         }
-        for payment in results
-    ]
+
+        # Call `get_evidence` with the payment's payment_id (_id)
+        payment_id = str(payment["_id"])
+        evidence_response = get_evidence(payment_id)  # You can adjust this if needed for async calls
+
+        if isinstance(evidence_response, FileResponse):
+            # If file data is found, include it
+            payment_data["evidence_file"] = {
+                "file_found": True,
+                "file_name": evidence_response.headers["Content-Disposition"].split("=")[-1],
+            }
+        else:
+            # If no file data is found, include a message
+            evidence_data = evidence_response.body.decode()  # Decode the response body into a string
+            evidence_data = json.loads(evidence_data)  # Convert the JSON string into a Python dictionary
+            payment_data["evidence_file"] = {
+                "file_found": False,
+                "message": evidence_data.get("message", "No file data available"),  # Safely extract message
+            }
+
+        payments_list.append(payment_data)
 
     return JSONResponse(content={"payments": payments_list, "totalCount": total_count})
