@@ -249,6 +249,8 @@ def get_payments(
     # Fetch filtered and paginated results
     results = payments_collection.find(query).sort("payee_due_date", DESCENDING).skip(skip).limit(limit)
 
+    total_count = payments_collection.count_documents(query)
+
     # Convert MongoDB results to JSON serializable format
     payments_list = [
         {
@@ -266,4 +268,4 @@ def get_payments(
         for payment in results
     ]
 
-    return JSONResponse(content={"payments": payments_list})
+    return JSONResponse(content={"payments": payments_list, "totalCount": total_count})
