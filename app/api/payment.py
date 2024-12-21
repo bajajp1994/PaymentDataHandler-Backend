@@ -182,7 +182,7 @@ def get_payments(
     payee_country: Optional[str] = None,
     payee_city: Optional[str] = None,
     search: Optional[str] = None,
-    skip: int = 0,
+    skip: int = 1,
     limit: int = 10,
 ):
     today = datetime.combine(date.today(), datetime.min.time())
@@ -246,8 +246,9 @@ def get_payments(
             {field: {"$regex": search, "$options": "i"}} for field in included_fields
         ]
 
+    calculate_skip = (skip - 1) * limit
     # Fetch filtered and paginated results
-    results = payments_collection.find(query).sort("payee_due_date", DESCENDING).skip(skip).limit(limit)
+    results = payments_collection.find(query).sort("payee_due_date", DESCENDING).skip(calculate_skip).limit(limit)
 
     total_count = payments_collection.count_documents(query)
 
