@@ -3,11 +3,21 @@ from api.payment import router as payment_router
 from dotenv import load_dotenv
 import os
 from services.normalize_csv_service import normalize_csv
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow requests from this origin
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
 
 # CSV file path from environment variable (can be adjusted if needed)
 CSV_FILE_PATH = os.getenv("CSV_FILE_PATH", "./payment_information.csv")

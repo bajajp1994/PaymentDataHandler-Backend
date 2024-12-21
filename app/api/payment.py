@@ -180,7 +180,6 @@ async def download_evidence(payment_id: str):
         - HTTPException: If there is an error during the retrieval process.
 """
 @router.get("/get_payments")
-@router.get("/get_payments")
 def get_payments(
     payee_first_name: Optional[str] = None,
     payee_last_name: Optional[str] = None,
@@ -201,11 +200,11 @@ def get_payments(
 
     # Update `payee_payment_status` based on `payee_due_date`
     payments_collection.update_many(
-        {"payee_due_date": {"$eq": today}},
+        {"payee_due_date": {"$eq": today}, "payee_payment_status": {"$ne": "completed"},},
         {"$set": {"payee_payment_status": "due_now"}}
     )
     payments_collection.update_many(
-        {"payee_due_date": {"$lt": today}},
+        {"payee_due_date": {"$lt": today}, "payee_payment_status": {"$ne": "completed"},},
         {"$set": {"payee_payment_status": "overdue"}}
     )
 
